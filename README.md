@@ -40,7 +40,12 @@ cd ASoulAutoClip
 pip install -r requirements.txt
 ```
 
-### 3. 字体配置
+### 3. 创建目录
+
+- 在使用该项目之前，需要在项目根目录下创建 `workspace` 目录，然后在`workspace`目录下面创建`video_input`目录和`clip_output`目录。
+- 在项目的`assets`目录下，创建`font`目录，存放制作视频使用的字体。
+
+### 4. 字体配置
 项目默认使用**自定义字体**生成封面和字幕。
 *   将你喜欢的字体文件（`.ttf`, `.otf`）放入 `assets/font/` 目录，并在自己电脑上安装该字体。
 *   修改 `Auto_clip.py` (主程序) 中的 `font_path` 为你的字体名称，`font_family`为字体家族名称（可以通过 `utils/get_font_family_name.py` 获取）。
