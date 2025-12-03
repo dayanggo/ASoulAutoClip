@@ -31,24 +31,29 @@ CONFIG = {
     },
 
     # --- [封面字体配置] ---
-    "font_path": os.path.join(os.path.dirname(__file__), "assets", "font", "Xinqingnianti.otf"), 
+    "font_path": os.path.join(os.path.dirname(__file__), "assets", "font", "WenYue-XinQingNianTi-W8-J-2.otf"), 
 
     # --- [视频字幕样式 (ASS)] ---
     "subtitle": {
+        # 视频方向设置，填写：
+        # "horizontal" = 横屏 (1920x1080)（B站经典风格）
+        # "vertical"   = 竖屏 (1080x1920)（类似于抖音）
+        # 根据初始视频的方向来设置，如果这里设置错了，那么字幕会变得异常大或者异常小
+        "orientation": "horizontal", 
 
         # 视频字幕字体（使用前要在自己系统里安装字体，否则系统会使用默认字体）
         "font_family": "WenYue XinQingNianTi (Authorization Required) W8-J", # 新青年体（推荐）
         # "font_family": "084-SSZhuangYuanTi",  # 上首状元体
         # "font_family": "Jiyucho",  # 自由体
 
-        "font_size": 120,           # 字体大小  (推荐横屏为120，竖屏为70)
-        "outline_width": 6,        # 描边宽度 （推荐为6）  
+        "font_size": 120,          # 字体大小  (推荐为120)
+        "outline_width": 7,        # 描边宽度 （推荐为7）  
         "shadow_depth": 2,         # 阴影深度  (推荐为2) 
         "margin_v": 50,            # 字幕和画面底部的距离（推荐为50）
 
         # 字幕样式：
         # 黄字黑色描边（通用）    
-        "primary_color": "&H0000FFFF", 
+        "primary_color": "&H0000E1FF", 
         "outline_color": "&H00000000", 
 
         # 白字黑色描边（通用）    
@@ -57,9 +62,9 @@ CONFIG = {
 
         # 嘉然专属
         # "primary_color": "&H00FFFFFF", 
-        # "outline_color": "&H00A87BE5", 
+        # "outline_color": "&H009972F0", 
 
-        # "primary_color": "&H00A87BE5", 
+        # "primary_color": "&H009972F0", 
         # "outline_color": "&H00FFFFFF", 
 
         # 贝拉专属
@@ -85,9 +90,9 @@ CONFIG = {
 
         # 心宜专属
         # "primary_color": "&H00FFFFFF", 
-        # "outline_color": "&H00956AD9",
+        # "outline_color": "&H009555FF",
 
-        # "primary_color": "&H00956AD9", 
+        # "primary_color": "&H009555FF", 
         # "outline_color": "&H00FFFFFF", 
 
         # 思诺专属  
@@ -132,7 +137,7 @@ CONFIG = {
             "title_top_color": (255, 255, 255),
             "title_bottom_color": (255, 225, 0),
             "title_stroke_color": (0, 0, 0),
-            "title_stroke_width": 10,
+            "title_stroke_width": 12,
             "gradient_start_y": 0.0,
             "gradient_opacity": 0,
             "show_summary": False
@@ -147,7 +152,7 @@ CONFIG = {
             "title_top_color": (255, 255, 0),
             "title_bottom_color": (255, 225, 255),
             "title_stroke_color": (0, 0, 0),
-            "title_stroke_width": 10,
+            "title_stroke_width": 12,
             "gradient_start_y": 0.0,
             "gradient_opacity": 0,
             "show_summary": False
@@ -160,7 +165,7 @@ CONFIG = {
             "title_size": 180,
             "title_color": (255, 225, 0),
             "title_stroke_color": (0, 0, 0),
-            "title_stroke_width": 10,
+            "title_stroke_width": 12,
             "gradient_start_y": 0.0,
             "gradient_opacity": 10,
             "show_summary": False
@@ -173,7 +178,7 @@ CONFIG = {
             "title_size": 180,
             "title_color": (255, 255, 255),
             "title_stroke_color": (50, 50, 50),
-            "title_stroke_width": 6,
+            "title_stroke_width": 8,
             "gradient_start_y": 0.0,
             "gradient_opacity": 150,
             "show_summary": False,
@@ -265,6 +270,16 @@ class SubtitleUtils:
     @staticmethod
     def create_ass_file(subtitles, output_path, start_offset, end_offset):
         s = CONFIG['subtitle']
+
+        # 根据配置决定 ASS 字幕的画布大小
+        # 竖屏模式下使用 1080x1920，防止字体被拉伸导致描边不均
+        if s.get('orientation', 'horizontal') == 'vertical':
+            play_res_x = 1080
+            play_res_y = 1920
+        else:
+            play_res_x = 1920
+            play_res_y = 1080
+
         style_line = (
             f"Style: Default,{s['font_family']},{s['font_size']},"
             f"{s['primary_color']},{s['primary_color']},{s['outline_color']},-1,"
@@ -274,8 +289,8 @@ class SubtitleUtils:
         header = f"""[Script Info]
 Title: Auto Clip
 ScriptType: v4.00+
-PlayResX: 1920
-PlayResY: 1080
+PlayResX: {play_res_x}
+PlayResY: {play_res_y}
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
@@ -626,7 +641,6 @@ def main():
     folder_name = os.path.basename(os.path.normpath(input_dir))
     
     # 将输出路径修改为: 原始输出路径 + 输入文件夹名
-    # 例如 workspace/clip_output -> workspace/clip_output/2025.11.25然-官方录播
     CONFIG['output_dir'] = os.path.join(CONFIG['output_dir'], folder_name)
     # ============================================================
 

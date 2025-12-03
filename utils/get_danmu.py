@@ -8,7 +8,7 @@ from io import BytesIO
 # ==================== 配置区域 ====================
 
 # 1. 视频输入（支持BV号或完整链接）
-VIDEO_INPUT = "https://www.bilibili.com/video/BV1NXSgBaEJu/?spm_id_from=333.1387.collection.video_card.click&vd_source=383b7ec9c80a4248371bd1d1bd487cf9"
+VIDEO_INPUT = ""
 
 # 2. SESSDATA（可选，用于获取更多弹幕历史）
 SESSDATA = ""
