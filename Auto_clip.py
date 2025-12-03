@@ -20,7 +20,7 @@ CONFIG = {
     # 1. 唯一的视频文件 (.mp4, .flv, .mkv, .mov, .ts)
     # 2. 唯一的字幕文件 (.srt)
     # 3. 输出时会自动提取这个文件夹的名字，在 output_dir 下创建同名文件夹
-    "input_dir": r"",
+    "input_dir": r"E:\pyProject\ASoulAutoClip\workspace\video_input\三国然",
     
     "output_dir": "workspace/clip_output",
 
@@ -38,7 +38,7 @@ CONFIG = {
         # 视频方向设置，填写：
         # "horizontal" = 横屏 (1920x1080)（B站经典风格）
         # "vertical"   = 竖屏 (1080x1920)（类似于抖音）
-        # 根据初始视频的方向来设置，如果这里设置错了，那么字幕会变得异常大或者异常小
+        # 如果是横屏直播就填"horizontal"，竖屏直播就填"vertical"。如果这里设置错了，那么字幕会变得异常大或者异常小
         "orientation": "horizontal", 
 
         # 视频字幕字体（使用前要在自己系统里安装字体，否则系统会使用默认字体）
