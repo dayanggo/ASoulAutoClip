@@ -20,7 +20,7 @@ CONFIG = {
     # 1. 唯一的视频文件 (.mp4, .flv, .mkv, .mov, .ts)
     # 2. 唯一的字幕文件 (.srt)
     # 3. 输出时会自动提取这个文件夹的名字，在 output_dir 下创建同名文件夹
-    "input_dir": r"E:\pyProject\ASoulAutoClip\workspace\video_input\三国然",
+    "input_dir": r"",
     
     "output_dir": "workspace/clip_output",
 
