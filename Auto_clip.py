@@ -268,28 +268,61 @@ class SubtitleUtils:
         return final_start, final_end
 
     @staticmethod
-    def auto_wrap_text(text, max_len=14):
+    def auto_wrap_text(text, max_len):
         """
         如果文本超过 max_len，则自动插入换行符。
-        为了排版整齐，会先去除原有的换行符，重新计算。
         """
-        # 1. 清除原有的换行符，变成一行长文本
-        clean_text = text.replace('\r', '').replace('\n', '')
+        # 清除原有的换行符(包括普通换行和ASS换行)
+        clean_text = text.replace('\r', '').replace('\n', '').replace('\\N', '')
         
-        # 2. 如果长度没超标，直接返回
         if len(clean_text) <= max_len:
             return clean_text
             
-        # 3. 超过长度，按 max_len 切割
         result = []
         for i in range(0, len(clean_text), max_len):
             result.append(clean_text[i : i + max_len])
-            
-        # 4. 用换行符拼接
         return '\n'.join(result)
 
+    # ================= 重排现有 ASS 文件的方法 =================
     @staticmethod
-    def create_ass_file(subtitles, output_path, start_offset, end_offset):
+    def reformat_ass_file(file_path, max_len):
+        """
+        读取现有的 ASS 文件，保留内容，仅重新计算换行
+        """
+        if not os.path.exists(file_path):
+            return
+
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            lines = f.readlines()
+
+        new_lines = []
+        for line in lines:
+            # ASS 字幕行通常以 "Dialogue:" 开头
+            if line.startswith('Dialogue:'):
+                # Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+                # 我们只需要分割前9个逗号，第10部分就是字幕文本(可能包含逗号)
+                parts = line.split(',', 9)
+                if len(parts) == 10:
+                    original_text = parts[9].strip()
+                    # 重新应用换行逻辑
+                    wrapped_text = SubtitleUtils.auto_wrap_text(original_text, max_len)
+                    final_text = wrapped_text.replace('\n', '\\N')
+                    
+                    # 拼装回去
+                    parts[9] = final_text + '\n'
+                    new_lines.append(','.join(parts))
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+        
+        # 覆盖写入
+        with open(file_path, 'w', encoding='utf-8-sig') as f:
+            f.writelines(new_lines)
+    # ===============================================================
+
+    @staticmethod
+    def create_ass_file(subtitles, output_path, start_offset, end_offset, max_char_len):
         s = CONFIG['subtitle']
 
         if s.get('orientation', 'horizontal') == 'vertical':
@@ -330,12 +363,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 start_str = SubtitleUtils.sec_to_ass_time(rel_start)
                 end_str = SubtitleUtils.sec_to_ass_time(rel_end)
                 
-                # ================= 调用自动换行逻辑 =================
-                # 1. 先进行每14字换行处理
-                wrapped_text = SubtitleUtils.auto_wrap_text(sub['text'], max_len=14)
-                # 2. 再将换行符转换为 ASS 专用的 \N
+                # 传入动态的 max_char_len
+                wrapped_text = SubtitleUtils.auto_wrap_text(sub['text'], max_len=max_char_len)
                 text = wrapped_text.replace('\n', '\\N')
-                # =========================================================
                 
                 events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}")
                 valid_count += 1
@@ -534,9 +564,7 @@ class CoverGenerator:
 
 class VideoProcessor:
     def __init__(self):
-        # 此时 CONFIG['output_dir'] 已经被 main 函数更新为包含子文件夹的路径
         self.base_dir = Path(CONFIG['output_dir'])
-        # 添加 parents=True 以确保能够递归创建多级目录 (例如 workspace/clip_output/2025...)
         self.base_dir.mkdir(exist_ok=True, parents=True)
         self.all_subs = []
         if os.path.exists(CONFIG['srt_file']):
@@ -551,7 +579,6 @@ class VideoProcessor:
         original_start_sec = SubtitleUtils.parse_srt_time(start_str)
         original_end_sec = SubtitleUtils.parse_srt_time(end_str)
 
-        # 获取配置中的缓冲句数
         pre_sentences = CONFIG['padding']['pre_sentences']
         post_sentences = CONFIG['padding']['post_sentences']
         
@@ -564,24 +591,34 @@ class VideoProcessor:
         base_name = f"{safe_title}"
         output_video = self.base_dir / f"{base_name}.mp4"
         output_cover = self.base_dir / f"{base_name}.jpg"
-        # 字幕文件不再是临时的，而是和视频同名，方便查找和保留
         ass_file = self.base_dir / f"{base_name}.ass"
 
         print(f"\n🎬 [{index}] {clip_data['title']}")
         print(f"   缓冲策略: 向前{pre_sentences}句 | 向后{post_sentences}句")
         print(f"   剪辑范围: {SubtitleUtils.sec_to_srt_time(actual_start_sec)} --> {SubtitleUtils.sec_to_srt_time(actual_end_sec)}，切片时长: {actual_duration:.2f}秒")
 
+        # ================= 计算字数限制 =================
+        if CONFIG['subtitle'].get('orientation', 'horizontal') == 'vertical':
+            max_char_len = 14
+        else:
+            max_char_len = 24
+        # ===============================================
+
         has_subs = False
         
         if ass_file.exists():
-            # 场景 A: 之前运行过，或者用户手动修改过字幕文件
+            # 场景 A: 字幕文件已存在
             print(f"   ✅ 检测到已有字幕文件: {ass_file.name}")
-            print(f"      将直接使用该文件进行写入 (如需重置请手动删除此文件)")
+            
+            # [关键修改] 调用重排函数，直接修改文件
+            SubtitleUtils.reformat_ass_file(ass_file, max_char_len)
+            
             has_subs = True
         else:
             # 场景 B: 第一次运行，从 SRT 生成字幕
             if self.all_subs:
-                count = SubtitleUtils.create_ass_file(self.all_subs, ass_file, actual_start_sec, actual_end_sec)
+                # 注意：这里多传了一个 max_char_len 参数
+                count = SubtitleUtils.create_ass_file(self.all_subs, ass_file, actual_start_sec, actual_end_sec, max_char_len)
                 if count > 0: has_subs = True
             else:
                 print("   ⚠️ 无字幕源，跳过字幕生成")
@@ -590,17 +627,12 @@ class VideoProcessor:
         ass_path = str(ass_file.absolute()).replace('\\', '/').replace(':', r'\:')
         current_dir = os.getcwd().replace('\\', '/').replace(':', r'\:')
         
-        # 使用动态获取的 source_video
         cmd = [
             'ffmpeg', 
             '-ss', str(actual_start_sec), 
             '-t', str(actual_duration),
             '-i', CONFIG['source_video'],
-            
-            # --- 视频编码部分 ---
             '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-            
-            # --- 音频编码部分 ---
             '-c:a', 'libmp3lame', '-b:a', '192k'
         ]
         
@@ -617,15 +649,11 @@ class VideoProcessor:
         
         if not cover_text_1:
             cover_text_1 = clip_data.get('title', '未命名片段')
-            print(f"   警告: 未找到 cover_text_1 字段,使用 title 作为封面文字")
         
         CoverGenerator.create_multiple_covers(
             CONFIG['source_video'], original_start_sec, original_end_sec,
             cover_text_1, cover_text_2, output_cover, cover_count
         )
-
-        # 不再删除字幕文件，保留以供手动修改
-        # if temp_ass.exists(): temp_ass.unlink() 
 
 # ==========================================
 # 2. 主程序入口
@@ -682,26 +710,29 @@ def main():
 
     # ================= 自动更新输出路径 =================
     # 获取输入文件夹的名称
-    # os.path.normpath 用于去除路径末尾可能存在的斜杠
     folder_name = os.path.basename(os.path.normpath(input_dir))
-    
-    # 将输出路径修改为: 原始输出路径 + 输入文件夹名
     CONFIG['output_dir'] = os.path.join(CONFIG['output_dir'], folder_name)
 
-    # ----------------- 清空输出目录逻辑 -----------------
+    # ----------------- [修改] 清理逻辑 -----------------
     output_path_obj = Path(CONFIG['output_dir'])
     
     if output_path_obj.exists():
-        print(f"🧹 检测到输出目录已存在，正在清空: {output_path_obj}")
-        try:
-            # 递归删除文件夹及其内容
-            shutil.rmtree(output_path_obj)
-        except Exception as e:
-            print(f"⚠️ 清空目录失败 (可能是文件被占用): {e}")
-    
-    # 重新创建空目录
-    output_path_obj.mkdir(parents=True, exist_ok=True)
-    print(f"✅ 输出目录已重置")
+        print(f"🧹 检测到输出目录已存在，正在清理视频和封面 (保留 .ass 字幕)...")
+        # 遍历目录下的所有文件
+        for file_path in output_path_obj.iterdir():
+            if file_path.is_file():
+                # 检查后缀名，如果是视频或图片则删除
+                if file_path.suffix.lower() in ['.mp4', '.mkv', '.flv', '.jpg', '.png', '.jpeg']:
+                    try:
+                        file_path.unlink()
+                        # print(f"   已删除: {file_path.name}")
+                    except Exception as e:
+                        print(f"⚠️ 无法删除文件 {file_path.name}: {e}")
+    else:
+        # 如果目录不存在，则创建
+        output_path_obj.mkdir(parents=True, exist_ok=True)
+        print(f"✅ 输出目录已创建")
+    # ---------------------------------------------------
 
     if not os.path.exists(CONFIG['source_video']):
         print(f"❌ 未找到视频文件: {CONFIG['source_video']}")
@@ -740,7 +771,7 @@ def main():
     print("=" * 60)
     print(f"数据来源: {data_source_path}")
     print(f"视频来源: {video_file}")
-    print(f"输出目录: {CONFIG['output_dir']}") # 此时会打印更新后的路径
+    print(f"输出目录: {CONFIG['output_dir']}")
     print(f"当前封面样式: {CONFIG['cover']['active_style']}")
     print(f"每个视频生成封面数: {CONFIG['cover']['count']}")
     
