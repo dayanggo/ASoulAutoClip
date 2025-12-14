@@ -272,43 +272,67 @@ class SubtitleUtils:
         """
         如果文本超过 max_len，则自动插入换行符。
         """
-        # 清除原有的换行符(包括普通换行和ASS换行)
         clean_text = text.replace('\r', '').replace('\n', '').replace('\\N', '')
-        
         if len(clean_text) <= max_len:
             return clean_text
-            
         result = []
         for i in range(0, len(clean_text), max_len):
             result.append(clean_text[i : i + max_len])
         return '\n'.join(result)
 
-    # ================= 重排现有 ASS 文件的方法 =================
+    # ================= [修改] 深度重构 ASS 文件 =================
     @staticmethod
     def reformat_ass_file(file_path, max_len):
         """
-        读取现有的 ASS 文件，保留内容，仅重新计算换行
+        读取现有的 ASS 文件：
+        1. 更新 Header (PlayResX/Y) 以匹配当前 CONFIG
+        2. 更新 Style 以匹配当前 CONFIG
+        3. 重新计算文本换行
         """
         if not os.path.exists(file_path):
             return
 
+        # 1. 获取当前的配置参数
+        s = CONFIG['subtitle']
+        if s.get('orientation', 'horizontal') == 'vertical':
+            current_res_x = 1080
+            current_res_y = 1920
+        else:
+            current_res_x = 1920
+            current_res_y = 1080
+
+        # 生成当前的 Style 字符串
+        current_style_line = (
+            f"Style: Default,{s['font_family']},{s['font_size']},"
+            f"{s['primary_color']},{s['primary_color']},{s['outline_color']},-1,"
+            f"-1,0,0,0,100,100,0,0,1,{s['outline_width']},{s['shadow_depth']},2,10,10,{s['margin_v']},1\n"
+        )
+
+        # 2. 读取旧文件
         with open(file_path, 'r', encoding='utf-8-sig') as f:
             lines = f.readlines()
 
         new_lines = []
         for line in lines:
-            # ASS 字幕行通常以 "Dialogue:" 开头
-            if line.startswith('Dialogue:'):
-                # Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
-                # 我们只需要分割前9个逗号，第10部分就是字幕文本(可能包含逗号)
+            # 更新分辨率
+            if line.startswith('PlayResX:'):
+                new_lines.append(f"PlayResX: {current_res_x}\n")
+            elif line.startswith('PlayResY:'):
+                new_lines.append(f"PlayResY: {current_res_y}\n")
+            
+            # 更新样式定义 (Style: Default,...)
+            elif line.startswith('Style:'):
+                # 直接用新的样式替换旧的样式
+                new_lines.append(current_style_line)
+            
+            # 更新字幕文本
+            elif line.startswith('Dialogue:'):
                 parts = line.split(',', 9)
                 if len(parts) == 10:
                     original_text = parts[9].strip()
                     # 重新应用换行逻辑
                     wrapped_text = SubtitleUtils.auto_wrap_text(original_text, max_len)
                     final_text = wrapped_text.replace('\n', '\\N')
-                    
-                    # 拼装回去
                     parts[9] = final_text + '\n'
                     new_lines.append(','.join(parts))
                 else:
@@ -316,10 +340,10 @@ class SubtitleUtils:
             else:
                 new_lines.append(line)
         
-        # 覆盖写入
+        # 3. 覆盖写入
         with open(file_path, 'w', encoding='utf-8-sig') as f:
             f.writelines(new_lines)
-    # ===============================================================
+    # ==========================================================
 
     @staticmethod
     def create_ass_file(subtitles, output_path, start_offset, end_offset, max_char_len):
