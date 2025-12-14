@@ -3,7 +3,7 @@ import re
 import subprocess
 import os
 import sys
-import math
+import shutil
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -535,28 +535,46 @@ class VideoProcessor:
         actual_duration = actual_end_sec - actual_start_sec
 
         safe_title = re.sub(r'[\\/:*?"<>|]', '_', clip_data['title'])
-        base_name = f"{index:02d}_{safe_title}"
+        base_name = f"{safe_title}"
         output_video = self.base_dir / f"{base_name}.mp4"
         output_cover = self.base_dir / f"{base_name}.jpg"
-        temp_ass = self.base_dir / f"temp_{index}.ass"
+        # 字幕文件不再是临时的，而是和视频同名，方便查找和保留
+        ass_file = self.base_dir / f"{base_name}.ass"
 
         print(f"\n🎬 [{index}] {clip_data['title']}")
         print(f"   缓冲策略: 向前{pre_sentences}句 | 向后{post_sentences}句")
         print(f"   剪辑范围: {SubtitleUtils.sec_to_srt_time(actual_start_sec)} --> {SubtitleUtils.sec_to_srt_time(actual_end_sec)}，切片时长: {actual_duration:.2f}秒")
 
         has_subs = False
-        if self.all_subs:
-            count = SubtitleUtils.create_ass_file(self.all_subs, temp_ass, actual_start_sec, actual_end_sec)
-            if count > 0: has_subs = True
+        
+        if ass_file.exists():
+            # 场景 A: 之前运行过，或者用户手动修改过字幕文件
+            print(f"   ✅ 检测到已有字幕文件: {ass_file.name}")
+            print(f"      将直接使用该文件进行写入 (如需重置请手动删除此文件)")
+            has_subs = True
+        else:
+            # 场景 B: 第一次运行，从 SRT 生成字幕
+            if self.all_subs:
+                count = SubtitleUtils.create_ass_file(self.all_subs, ass_file, actual_start_sec, actual_end_sec)
+                if count > 0: has_subs = True
+            else:
+                print("   ⚠️ 无字幕源，跳过字幕生成")
 
-        ass_path = str(temp_ass.absolute()).replace('\\', '/').replace(':', r'\:')
+        # 准备 FFmpeg 命令
+        ass_path = str(ass_file.absolute()).replace('\\', '/').replace(':', r'\:')
         current_dir = os.getcwd().replace('\\', '/').replace(':', r'\:')
         
         # 使用动态获取的 source_video
         cmd = [
-            'ffmpeg', '-ss', str(actual_start_sec), '-t', str(actual_duration),
+            'ffmpeg', 
+            '-ss', str(actual_start_sec), 
+            '-t', str(actual_duration),
             '-i', CONFIG['source_video'],
-            '-c:v', 'libx264', '-preset', 'medium', '-crf', '23',
+            
+            # --- 视频编码部分 ---
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+            
+            # --- 音频编码部分 ---
             '-c:a', 'libmp3lame', '-b:a', '192k'
         ]
         
@@ -580,7 +598,8 @@ class VideoProcessor:
             cover_text_1, cover_text_2, output_cover, cover_count
         )
 
-        if temp_ass.exists(): temp_ass.unlink()
+        # 不再删除字幕文件，保留以供手动修改
+        # if temp_ass.exists(): temp_ass.unlink() 
 
 # ==========================================
 # 2. 主程序入口
@@ -616,7 +635,7 @@ def auto_detect_files(input_dir):
         
     # 字幕检测
     if len(srts) == 0:
-        print("⚠️ 未找到SRT字幕文件，将不烧录字幕")
+        print("⚠️ 未找到SRT字幕文件，将不写入字幕")
     elif len(srts) > 1:
         print(f"❌ 找到多个SRT文件，无法确定使用哪个: {srts}")
         sys.exit(1)
@@ -635,14 +654,28 @@ def main():
     CONFIG['source_video'] = video_file
     CONFIG['srt_file'] = srt_file
 
-    # ================= [新修改] 自动更新输出路径 =================
+    # ================= 自动更新输出路径 =================
     # 获取输入文件夹的名称
     # os.path.normpath 用于去除路径末尾可能存在的斜杠
     folder_name = os.path.basename(os.path.normpath(input_dir))
     
     # 将输出路径修改为: 原始输出路径 + 输入文件夹名
     CONFIG['output_dir'] = os.path.join(CONFIG['output_dir'], folder_name)
-    # ============================================================
+
+    # ----------------- 清空输出目录逻辑 -----------------
+    output_path_obj = Path(CONFIG['output_dir'])
+    
+    if output_path_obj.exists():
+        print(f"🧹 检测到输出目录已存在，正在清空: {output_path_obj}")
+        try:
+            # 递归删除文件夹及其内容
+            shutil.rmtree(output_path_obj)
+        except Exception as e:
+            print(f"⚠️ 清空目录失败 (可能是文件被占用): {e}")
+    
+    # 重新创建空目录
+    output_path_obj.mkdir(parents=True, exist_ok=True)
+    print(f"✅ 输出目录已重置")
 
     if not os.path.exists(CONFIG['source_video']):
         print(f"❌ 未找到视频文件: {CONFIG['source_video']}")
