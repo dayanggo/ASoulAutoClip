@@ -104,7 +104,7 @@ CONFIG = {
     },
 
     # ==========================================
-    # 🎨 封面样式配置区
+    # 🎨 封面样式配置区（如果是竖屏，需要把使用的封面样式调小，调整title_size）
     # ==========================================
     "cover": {
         "count": 5,  # 每个视频生成的封面数量
@@ -268,11 +268,30 @@ class SubtitleUtils:
         return final_start, final_end
 
     @staticmethod
+    def auto_wrap_text(text, max_len=14):
+        """
+        如果文本超过 max_len，则自动插入换行符。
+        为了排版整齐，会先去除原有的换行符，重新计算。
+        """
+        # 1. 清除原有的换行符，变成一行长文本
+        clean_text = text.replace('\r', '').replace('\n', '')
+        
+        # 2. 如果长度没超标，直接返回
+        if len(clean_text) <= max_len:
+            return clean_text
+            
+        # 3. 超过长度，按 max_len 切割
+        result = []
+        for i in range(0, len(clean_text), max_len):
+            result.append(clean_text[i : i + max_len])
+            
+        # 4. 用换行符拼接
+        return '\n'.join(result)
+
+    @staticmethod
     def create_ass_file(subtitles, output_path, start_offset, end_offset):
         s = CONFIG['subtitle']
 
-        # 根据配置决定 ASS 字幕的画布大小
-        # 竖屏模式下使用 1080x1920，防止字体被拉伸导致描边不均
         if s.get('orientation', 'horizontal') == 'vertical':
             play_res_x = 1080
             play_res_y = 1920
@@ -310,7 +329,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 rel_end = min(clip_duration, sub['end'] - start_offset)
                 start_str = SubtitleUtils.sec_to_ass_time(rel_start)
                 end_str = SubtitleUtils.sec_to_ass_time(rel_end)
-                text = sub['text'].replace('\n', '\\N')
+                
+                # ================= 调用自动换行逻辑 =================
+                # 1. 先进行每14字换行处理
+                wrapped_text = SubtitleUtils.auto_wrap_text(sub['text'], max_len=14)
+                # 2. 再将换行符转换为 ASS 专用的 \N
+                text = wrapped_text.replace('\n', '\\N')
+                # =========================================================
+                
                 events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}")
                 valid_count += 1
         
