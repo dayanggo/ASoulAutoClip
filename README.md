@@ -1,3 +1,13 @@
+# 2026.1.1更新（V2.0）
+
+- `Auto_clip.py` 启动时会自动纠正字幕（调用 `utils/ASRCorrector.py`）并自动识别输入目录中的视频与 SRT
+- **输出目录改为：`workspace/clip_output/<输入文件夹名>/<序号_片段标题>/`，每个片段独立子文件夹**
+- **输出每个片段文件夹里面都会生成 `regen_clip.py`，可独立重新生成该片段，从而实现单独编辑某个视频**
+- **`Auto_clip.py` 默认只生成视频与字幕，封面在运行 `regen_clip.py` 时生成**
+- `regen_clip.py` 顶部配置可单独调整字幕/封面，并用 `REBUILD_ASS` 控制是否重建 `.ass`
+- `regen_clip.py` 的默认配置来自生成当时的 `Auto_clip.py` 快照，修改配置后需重新运行 `Auto_clip.py` 生成新的脚本
+
+---
 
 # 🎞️ A-SOUL 自动化切片工具 (Asoul-Auto-Clip)
 

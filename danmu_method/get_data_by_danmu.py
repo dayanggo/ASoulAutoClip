@@ -25,7 +25,7 @@ class ApiConfig:
     # LLM API 设置
     API_KEY = ""  # 填写你自己的API Key
     BASE_URL = "https://api.siliconflow.cn/v1/chat/completions" # 硅基流动请求地址
-    MODEL_NAME = "deepseek-ai/DeepSeek-V3.1-Terminus"  # 模型名称
+    MODEL_NAME = "deepseek-ai/DeepSeek-V3.2"  # 模型名称
     TIMEOUT = 60    # 请求超时时间
 
 # 成员出场状态
