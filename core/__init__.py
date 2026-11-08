@@ -1,1 +1,1 @@
-# Core package for Auto_clip.py
+"""Recording analysis, subtitle layout, rendering and publication preparation."""

@@ -1,0 +1,2 @@
+# Compatibility file. Edit requirements/asr.txt instead.
+-r requirements/asr.txt

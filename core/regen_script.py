@@ -1,17 +1,19 @@
 import json
+from pprint import pformat
 from string import Template
+from core.subtitle_style import subtitle_style
 
 def write_regen_script(script_path, clip_data, config):
-    clip_json = json.dumps(clip_data, ensure_ascii=False, indent=2)
+    clip_json = pformat(clip_data, sort_dicts=False, width=100)
     padding = (config or {}).get("padding", {})
-    subtitle = (config or {}).get("subtitle", {})
+    subtitle = subtitle_style((config or {}).get("subtitle"))
 
     pre_sentences = padding.get("pre_sentences", 5)
     post_sentences = padding.get("post_sentences", 2)
 
-    orientation = subtitle.get("orientation", "horizontal")
-    font_family = subtitle.get("font_family", "WenYue XinQingNianTi (Authorization Required) W8-J")
-    font_size = subtitle.get("font_size", 120)
+    orientation = subtitle.get("orientation", "auto")
+    font_family = subtitle['font_family']
+    font_size = subtitle['font_size']
     outline_width = subtitle.get("outline_width", 7)
     shadow_depth = subtitle.get("shadow_depth", 2)
     margin_v = subtitle.get("margin_v", 50)
@@ -37,6 +39,7 @@ def write_regen_script(script_path, clip_data, config):
     # --- [视频字幕样式 (ASS)] ---
     "subtitle": {
         # 视频方向设置，填写：
+        # "auto" = 跟随源视频方向（推荐）
         # "horizontal" = 横屏 (1920x1080)
         # "vertical"   = 竖屏 (1080x1920)
         "orientation": $orientation,
@@ -50,6 +53,15 @@ def write_regen_script(script_path, clip_data, config):
         "outline_width": $outline_width,
         "shadow_depth": $shadow_depth,
         "margin_v": $margin_v,
+        "caption_mode": $caption_mode,
+        "max_phrase_chars": $max_phrase_chars,
+        "phrase_pause_ms": $phrase_pause_ms,
+        "caption_hold_ms": $caption_hold_ms,
+        "emphasis_mode": "none",
+        "bold": $bold,
+        "spacing": $spacing,
+        "margin_h": $margin_h,
+        "text_replacements": $text_replacements,
 
         # 当前字幕样式（如果不满意，可以在下面注释的字幕样式里面选择一个修改）
         "primary_color": $primary_color,
@@ -187,6 +199,14 @@ def write_regen_script(script_path, clip_data, config):
         outline_width=outline_width,
         shadow_depth=shadow_depth,
         margin_v=margin_v,
+        caption_mode=repr(subtitle['caption_mode']),
+        max_phrase_chars=subtitle['max_phrase_chars'],
+        phrase_pause_ms=subtitle['phrase_pause_ms'],
+        caption_hold_ms=subtitle['caption_hold_ms'],
+        bold=subtitle['bold'],
+        spacing=subtitle['spacing'],
+        margin_h=subtitle['margin_h'],
+        text_replacements=repr(subtitle['text_replacements']),
         primary_color=primary_color_literal,
         outline_color=outline_color_literal,
     )

@@ -1,0 +1,3 @@
+# Optional original download tool; not needed by the default clipping pipeline.
+-r base.txt
+yt-dlp==2026.10.26

@@ -1,0 +1,4 @@
+-r base.txt
+faster-whisper==1.2.1
+# faster-whisper 1.2.1 still passes metadata_errors, removed by PyAV 19.
+av>=11,<19

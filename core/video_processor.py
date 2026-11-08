@@ -7,18 +7,27 @@ from core.cover_generator import CoverGenerator
 from core.file_utils import clean_output_dir, sanitize_filename
 from core.regen_script import write_regen_script
 from core.subtitle_utils import SubtitleUtils
+from core.caption_layout import find_word_timing_path
+from core.highlight_selection import write_json
+from core.media_geometry import caption_line_capacity, probe_video, resolve_subtitle_style
 
 class VideoProcessor:
     def __init__(self, config, input_dir=None):
-        self.config = config
+        media=probe_video(config['source_video'])
+        self.config = dict(config,subtitle=resolve_subtitle_style(config.get('subtitle'),media))
+        config=self.config
         self.base_dir = Path(config['output_dir'])
         self.base_dir.mkdir(exist_ok=True, parents=True)
         self.subtitle_utils = SubtitleUtils(config)
         self.cover_generator = CoverGenerator(config)
         self.all_subs = []
         self.input_dir = input_dir or config.get('input_dir', '')
+        source = Path(config['source_video']).resolve()
+        stat = source.stat()
+        self.source_identity = {'path': str(source), 'size': stat.st_size, 'mtime_ns': stat.st_mtime_ns}
 
         srt_file = config.get('srt_file')
+        self.word_timing_path = find_word_timing_path(srt_file)
         if srt_file and os.path.exists(srt_file):
             self.all_subs = SubtitleUtils.parse_srt(srt_file)
         else:
@@ -41,10 +50,13 @@ class VideoProcessor:
 
         pre_sentences = self.config['padding']['pre_sentences']
         post_sentences = self.config['padding']['post_sentences']
-        
-        actual_start_sec, actual_end_sec = SubtitleUtils.get_expanded_time_range(
-            self.all_subs, original_start_sec, original_end_sec, pre_sentences, post_sentences
-        )
+        if clip_data.get('boundary_locked') is True:
+            pre_sentences = post_sentences = 0
+            actual_start_sec, actual_end_sec = original_start_sec, original_end_sec
+        else:
+            actual_start_sec, actual_end_sec = SubtitleUtils.get_expanded_time_range(
+                self.all_subs, original_start_sec, original_end_sec, pre_sentences, post_sentences
+            )
         actual_duration = actual_end_sec - actual_start_sec
 
         safe_title = sanitize_filename(clip_data.get('title', 'clip'))
@@ -69,10 +81,7 @@ class VideoProcessor:
             f"{SubtitleUtils.sec_to_srt_time(actual_end_sec)}，切片时长: {actual_duration:.2f}秒"
         )
 
-        if self.config['subtitle'].get('orientation', 'horizontal') == 'vertical':
-            max_char_len = 14
-        else:
-            max_char_len = 24
+        max_char_len = caption_line_capacity(self.config['subtitle'])
 
         has_subs = False
         
@@ -84,17 +93,22 @@ class VideoProcessor:
 
         if ass_file.exists():
             print(f"   ✅ 检测到已有字幕文件: {ass_file.name}")
-            self.subtitle_utils.reformat_ass_file(ass_file, max_char_len)
+            self.subtitle_utils.reformat_ass_file(ass_file, max_char_len, actual_start_sec,
+                                                  self.source_identity, self.word_timing_path)
             has_subs = True
         else:
             if self.all_subs:
                 count = self.subtitle_utils.create_ass_file(
-                    self.all_subs, ass_file, actual_start_sec, actual_end_sec, max_char_len
+                    self.all_subs, ass_file, actual_start_sec, actual_end_sec, max_char_len,
+                    source_identity=self.source_identity, word_timing_path=self.word_timing_path
                 )
                 if count > 0:
                     has_subs = True
             else:
                 print("   ⚠️ 无字幕源，跳过字幕生成")
+
+        if self.subtitle_utils.last_layout is not None:
+            write_json(clip_dir / f"{base_name}.captions.layout.json", self.subtitle_utils.last_layout)
 
         ass_path = str(ass_file.absolute()).replace('\\', '/').replace(':', r'\:')
         current_dir = os.getcwd().replace('\\', '/').replace(':', r'\:')

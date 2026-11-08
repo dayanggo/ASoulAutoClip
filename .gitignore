@@ -1,0 +1,64 @@
+# Credentials and machine-specific settings
+.env
+.env.*
+!.env.example
+/config/local/**
+!/config/local/.gitkeep
+*.local.json
+*.secrets.json
+*.cookies.json
+cookies.txt
+
+# Generated data; historical paths remain usable locally
+/outputs/
+/ouput/
+/workspace/
+/models/
+/third_party/
+/Data_source.txt
+
+# Python environments, bytecode and tooling
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Recordings, subtitles, model weights and downloaded wheels
+*.mp4
+*.mkv
+*.flv
+*.mov
+*.ts
+*.wav
+*.mp3
+*.srt
+*.ass
+*.xml
+*.pth
+*.pth.tar
+*.pt
+*.onnx
+*.safetensors
+*.whl
+*.part
+*.log
+
+# Locally installed fonts
+/resources/fonts/*
+!/resources/fonts/README.md
+
+# Editor / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini

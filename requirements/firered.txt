@@ -1,0 +1,10 @@
+-r asr.txt
+# CUDA PyTorch is installed separately by setup_firered.cmd.
+numpy==1.26.4
+transformers==4.51.3
+kaldiio==2.18.1
+kaldi-native-fbank==1.22.3
+sentencepiece==0.2.1
+soundfile==0.13.1
+cn2an==0.5.23
+textgrid==1.6.1

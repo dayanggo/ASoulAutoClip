@@ -1,0 +1,15 @@
+{
+  "recordings_dir": "",
+  "base_config": "",
+  "allowed_rooms": [],
+  "state_dir": "outputs/recorder-service",
+  "outputs_dir": "outputs/recordings",
+  "port": 18765,
+  "quiet_seconds": 120,
+  "stable_seconds": 30,
+  "poll_seconds": 5,
+  "danmaku_offset_seconds": 0,
+  "danmaku_policy": "optional",
+  "danmaku_wait_seconds": 60,
+  "mode": "full"
+}

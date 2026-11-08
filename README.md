@@ -1,219 +1,223 @@
-# 2026.1.1更新（V2.0）
+# ASoulAutoClip
 
-- `Auto_clip.py` 启动时会自动纠正字幕（调用 `utils/ASRCorrector.py`）并自动识别输入目录中的视频与 SRT
-- **输出目录改为：`workspace/clip_output/<输入文件夹名>/<序号_片段标题>/`，每个片段独立子文件夹**
-- **输出每个片段文件夹里面都会生成 `regen_clip.py`，可独立重新生成该片段，从而实现单独编辑某个视频**
-- **`Auto_clip.py` 默认只生成视频与字幕，封面在运行 `regen_clip.py` 时生成**
-- `regen_clip.py` 顶部配置可单独调整字幕/封面，并用 `REBUILD_ASS` 控制是否重建 `.ass`
-- `regen_clip.py` 的默认配置来自生成当时的 `Auto_clip.py` 快照，修改配置后需重新运行 `Auto_clip.py` 生成新的脚本
+一个面向中文直播录播的本地切片工具：自动转写、发现候选、核对字幕证据与事件边界，生成带字幕的视频、封面、标题、简介和回看报告。
 
----
+主流程：**本地转写 → 词典纠错 → 有证据的候选选片 → 看点与边界复核 → 字幕及视频 → 投稿素材**。
 
-# 🎞️ A-SOUL 自动化切片工具 (Asoul-Auto-Clip)
+目前以 Windows 本地使用为主。只有视频也能切片；有独立 XML/ASS 弹幕时可辅助理解和排序。可接收录播姬 Webhook v2，在录制结束、文件稳定后串行处理，默认缺 XML 时等待后仅使用视频。没有 B 站自动上传、逐句说话人分离或自动多段跳剪。选片以语音字幕为证据；动作高光、人物归属和最终发布内容仍需复核。
 
-![FFmpeg](https://img.shields.io/badge/Dependency-FFmpeg-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
-![Status](https://img.shields.io/badge/Status-Stable-brightgreen)
+## 能做什么
 
-> **极速切片，解放双手！专为 A-SOUL 切片设计的自动化生产线。**
-> 
-> 仅需 **5-10分钟** 配置，即可从两小时的直播中自动提取 **10-20个** 精彩片段。自动对齐时间轴、生成多风格封面、内嵌字幕及标题，直接生成可投稿视频！
+| 输入 / 功能 | 当前行为 |
+| --- | --- |
+| 只有录播视频 | 本地 ASR 转写后选片，不要求有弹幕 |
+| 视频 + XML/ASS 弹幕 | 抽样观众评论辅助理解；给“绷”附近增加查找与合格候选排序权重 |
+| 已有对齐的 SRT | 可导入字幕；缺少可验证词时间时保留原字幕时间，不伪造短句时间 |
+| 录播姬自动接入 | Webhook v2、持久化队列、录制结束与文件稳定校验、串行处理 |
+| 本地转写后端 | 默认 faster-whisper；FireRedASR2-AED 可选、需独立安装 |
+| 字幕与输出方向 | 青年体、84号统一黄字、底部短句；自动适配横竖屏 |
+| 投稿准备 | 导出候选封面、标题、简介、标签及 `posting_manifest.json`，由用户复核后投稿 |
 
-## ✨ 核心功能
-
-*   **⚡ 极速处理**：相比手动切片（耗时约2小时），本工具可节省 **90%** 以上的时间。
-*   **🧠 双重策略**：
-    *   **LLM 语义分析**：利用 GPT-5/Claude/Gemini/豆包 分析字幕，精准提取对话梗。
-    *   **弹幕热度分析**：基于观众真实反应（"绷"、"?"、"哈哈哈"）定位高光时刻。
-*   **🎨 全自动包装**：自动剪辑视频、嵌入字幕、生成标题、生成多种风格的封面图。
-*   **🛠️ 智能辅助**：内置 ASR 文本纠错字典、官方/非官方录播时间轴对齐工具。
-
----
-
-## 📦 安装与环境配置
-
-在运行之前，请确保你的环境满足以下要求。
-
-### 1. 系统依赖 (必须安装)
-本项目依赖 **FFmpeg** 进行视频处理，请务必安装并添加到环境变量。
-
-*   **Windows**: [下载 FFmpeg](https://ffmpeg.org/download.html) -> 解压 -> 将 `bin` 目录添加到系统环境变量 `Path` 中，详细教程参考：[FFmpeg 超级详细安装与配置教程（Windows 系统）](https://blog.csdn.net/Natsuago/article/details/143231558)。
-*   **Mac**: `brew install ffmpeg`
-*   **Linux**: `sudo apt install ffmpeg`
-
-验证安装：在终端输入 `ffmpeg -version` 不报错即为成功。
-
-### 2. Python 依赖
-```bash
-git clone https://github.com/dayanggo/ASoulAutoClip.git
-cd ASoulAutoClip
-pip install -r requirements.txt
+```mermaid
+flowchart LR
+    V[录播视频] --> A[本地转写或导入SRT]
+    A --> C[字幕纠错与证据索引]
+    D[可选XML或ASS弹幕] --> S[模型发现候选]
+    C --> S
+    S --> Q[原文校验、看点评分、边界复核]
+    Q --> R[字幕编码与封面文案]
+    R --> O[成片、投稿素材、回看报告]
 ```
 
-### 3. 创建目录
+当前按**一个连续区间**生成一条切片。没有逐句说话人分离、视频弹幕 OCR、纯画面高光理解、片内多段跳剪或 B 站自动投稿。允许找不到合格片段，模型评分不代表准确率。
 
-- 在使用该项目之前，需要在项目根目录下创建 `workspace` 目录，然后在`workspace`目录下面创建`video_input`目录和`clip_output`目录。
-- 在项目的`assets`目录下，创建`font`目录，存放制作视频使用的字体。
+## 快速开始（Windows / CMD）
 
-### 4. 字体配置
-项目默认使用**自定义字体**生成封面和字幕。
-*   将你喜欢的字体文件（`.ttf`, `.otf`）放入 `assets/font/` 目录，并在自己电脑上安装该字体。
-*   修改 `Auto_clip.py` (主程序) 中的 `font_path` 为你的字体名称，`font_family`为字体家族名称（可以通过 `utils/get_font_family_name.py` 获取）。
+推荐 Python 3.12，需要 Git（克隆源码时）和已加入 `Path` 的 FFmpeg / ffprobe。源码不包含虚拟环境、模型权重、视频、API Key 或字体文件。默认字体需自行安装，见 [字体说明](resources/fonts/README.md)。首次转写需要下载模型；选片和文案阶段使用你配置的大模型 API。
 
-字体推荐安装：
-- [文悦新青年体](https://www.fonts.net.cn/font-32331338415.html)
-- [上首状元体](https://www.fonts.net.cn/font-40031585739.html)
-- [自由体](https://www.fonts.net.cn/font-31793233330.html)
+从 GitHub 下载 ZIP 并解压，或克隆自己的仓库后进入项目根目录。在 **CMD** 中准备环境：
 
----
+```bat
+python --version
+ffmpeg -version
+ffprobe -version
+if not exist .venv\Scripts\python.exe python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements\asr.txt
+```
 
-## 📂 项目结构
+然后创建本机配置，已有配置不会覆盖：
+
+```bat
+if not exist config\local mkdir config\local
+if not exist config\local\highlights.json copy config\examples\highlights.example.json config\local\highlights.json
+if not exist .env copy .env.example .env
+```
+
+编辑两个本机文件：
+
+1. `config/local/highlights.json`：填写 `input.video`、`llm.model`；`input.srt` 留空则本地转写，`input.output_dir` 留空则自动分配任务目录。Windows 路径建议写成 `D:/recordings/example.mp4`。
+2. `.env`：填写 `SILICONFLOW_API_KEY`。配置中的 `llm.api_key_env` 保持为环境变量名称，不要填写密钥本身。
+
+检查并运行：
+
+```bat
+.\run_clips.cmd --check
+.\run_clips.cmd --analyze-only
+.\run_clips.cmd
+```
+
+三条命令分别用于检查、分析回看、正式出片。启动器也能创建或复用 `.venv`、按需安装依赖。`--check` 不下载转写模型、不调用选片 API；`--analyze-only` 会转写并调用选片 API，暂不编码。CUDA 运行库、模型和字体需按本机配置准备；前置检查通过不代表实际 GPU 推理已经验证。
+
+默认转写后端为 faster-whisper。使用 FireRed 时，按 [FireRed 指南](docs/guides/firered.md) 安装独立环境、下载权重并修改 `asr`，不要把自己电脑的 `models/` 或 `.venv-firered/` 上传到仓库。
+
+## 两种切片方式
+
+只有视频时，配置中的 `danmaku.path` 保持空白即可。若之前配置过其他视频的弹幕，显式清空：
+
+```bat
+.\run_clips.cmd --config config\local\highlights.json --danmaku ""
+```
+
+有匹配视频时间轴的 XML/ASS 时：
+
+```bat
+.\run_clips.cmd --config config\local\highlights.json --danmaku "D:\recordings\example.xml"
+```
+
+弹幕只作语境与观众反应线索，最终引文仍来自语音字幕。已经烧录弹幕的 MP4 不能替代独立文件。手动指定的弹幕文件损坏、缺失或时间范围错误时会提示检查，详见 [弹幕输入与对齐](docs/guides/audience-and-danmaku.md)。
+
+录播姬自动方式使用 `python -m scripts.recorder_service`。默认 `danmaku_policy=optional`，优先使用同名 XML，等待后仍缺失就只处理视频；`required` 则必须有 XML。应在录制前启动服务，配置步骤见 [录播接入指南](docs/guides/recorder-integration.md)。
+
+## 输出与回看
+
+新任务默认输出到 `outputs/<录播名称_标识>/`；有显式 `input.output_dir` 或 `--output` 时使用指定目录。
+
+```bat
+start "" "outputs\你的任务目录\report.html"
+```
+
+如果网页中视频一直显示 0:00，请在资源管理器中双击报告旁的 `open_preview.cmd`，用本机浏览器预览。旧报告也可运行 `python -m scripts.preview_report --report "报告完整路径"`。不需要重新转写或编码，详见 [预览说明](docs/guides/report-preview.md)。
+
+每条通过的片段位于 `clips/<ID>/`，包含 `clip.mp4`、字幕、`cover.jpg`、候选封面、`title.txt`、`description.txt`、`tags.txt` 和 `metadata.json`。`posting_manifest.json` 汇总可用于投稿的素材；不会自动上传。
+
+```text
+outputs/<任务目录>/
+├─ asr/                     转写缓存、词时间与来源回执
+├─ transcript.indexed.json  字幕ID、时间、纠错与来源
+├─ analysis.json            候选、证据、分数、弃选及失败原因
+├─ report.html              回看报告
+├─ open_preview.cmd         本机预览入口
+├─ posting_manifest.json    本次投稿素材清单
+└─ clips/<ID>/              成片、字幕、封面和文案
+```
+
+导入已有 SRT 时可能没有新建的 `asr/`；零候选时不会生成成片。检查本次产量以报告和投稿清单为准，历史 `clips/` 不自动清理。
+
+完整步骤见 [运行指南](docs/guides/quickstart.md)。使用 FireRed 见 [本地模型配置](docs/guides/firered.md)。
+
+录播姬接入会把每个分段写到独立输出，保留事件和队列；暂不跨段拼接，也不扫描旧录播。
+
+## 常用命令
+
+| 目的 | 命令 / 参数 |
+| --- | --- |
+| 选择某个本机配置 | `.\run_clips.cmd --config config\local\radio.json` |
+| 指定新录播和独立输出 | `.\run_clips.cmd --video "E:\recordings\sample.mp4" --output outputs\sample` |
+| 更严格地选片，先看报告 | 在完整命令末尾追加 `--min-score 90 --analyze-only` |
+| 读取独立XML/ASS弹幕，给“绷”附近增加优先级 | 追加 `--danmaku "E:\recordings\sample.xml" --analyze-only` |
+| 只做转写 | `--prepare-only` |
+| 只更新已有成片字幕 | `--output "任务目录" --captions-only` |
+| 重做标题和封面 | `--output "任务目录" --restyle`；可能调用 API |
+| 补齐已有投稿素材 | `--output "任务目录" --package-only`；不调用 API |
+| 审查已有片段 | `python -m scripts.audit_clips --output "任务目录"` |
+| 下载 FireRed 模型 | `python -m scripts.download_firered_aed` |
+| 检查录播姬自动接入配置 | `python -m scripts.recorder_service --check` |
+| 查看自动录播任务队列 | `python -m scripts.recorder_service --status` |
+
+同一视频和相同输出目录重跑会复用有效缓存。FireRed新任务逐段保存识别结果，中断后可验证并复用已完成语音段；其他后端仍按整次转写缓存。修改提示词、字幕或相关配置后，对应分析缓存可能失效。
+
+## 选片与字幕约定
+
+- 默认看点门槛 **85 分**；初选、复核都达标才保留，最终分取两轮较低值。允许产出零条，不补齐 `max_clips`。
+- 默认面向不了解主播的普通观众，避免依赖粉丝背景的选题；标题和封面也围绕片内具体事件。
+- 可输入独立XML/ASS弹幕提示回看“绷”附近，并在合格候选之间最多加5分排序权重，不改变内容分或降低门槛。烧录进MP4的弹幕尚无OCR读取。
+- 有弹幕时，初选与边界复核还会参考少量带时间的普通观众评论，每窗口最多24条、每条最多120字；评论不作为主播发言或已确认的事实。没有弹幕时照常依据本地语音转写选片。
+- 分数是模型的编辑判断，尚未经过人工标注集校准，不代表准确率或观众满意率。
+- 模型引用字幕 ID 与原文，程序校验引文、范围、时长，并保留失败和弃选原因。引文匹配不等于语义一定正确。
+- 默认字幕保留青年体、84 号统一黄字、原底部位置；长句按可验证词时间分段，自动适配横竖屏。
+- 字典位于 `resources/dictionaries/asr_dict.txt`，格式是“左边待修正，右边目标写法”。原始 ASR 与时间不回写，修改记录可查。
+
+详见 [看点门槛](docs/guides/quality-gate.md)、[大众向与弹幕加权](docs/guides/audience-and-danmaku.md)、[字幕纠错](docs/guides/subtitle-correction.md)、[多人录播](docs/guides/multi-speaker.md)。
+
+## 目录
 
 ```text
 ASoulAutoClip/
-├── assets/                       # 静态资源 (字体、图片素材)
-├── danmu_method/                 # [核心] 弹幕分析算法模块
-├── prompt_method/                # [核心] LLM 提示词模板
-├── utils/                        # 工具箱
-│   ├── ASRCorrector.py           # 字幕纠错工具
-│   ├── get_danmu.py              # 弹幕下载器
-│   ├── edit_data_source.py       # 时间轴对齐工具
-│   ├── get_font_family_name.py   # 获取字体家族名称，用于填入主程序
-|   └── asr_dict.txt              # 字幕纠错字典
-├── workspace/                    # 工作区
-│   ├── clip_output/              # 剪辑片段输出
-|   └── video_input/              # 放入视频、字幕、弹幕文件等素材
-├── Auto_clip.py                  # 🚀 主程序入口
-├── Data_source.txt               # [数据] 剪辑片段元数据
-├── requirements.txt              # Python 依赖
-└── README.md                     # 说明文档
+├─ core/                 主流程实现与共享处理模块
+├─ scripts/              启动器实现、模型维护和仓库检查
+├─ legacy/               原版手动剪辑、弹幕分析及可选工具
+├─ resources/
+│  ├─ prompts/           主流程运行时提示词
+│  ├─ dictionaries/      ASR 纠错词典
+│  ├─ images/            原项目的封面素材
+│  └─ fonts/             字体说明，本机字体不提交
+├─ config/
+│  ├─ examples/          可公开的空白配置模板
+│  └─ local/             本机配置，不提交 Git
+├─ requirements/         分层依赖清单
+├─ tests/                离线测试与小型临时媒体验证
+├─ docs/                 使用指南、架构、调研与历史记录
+├─ .github/              CI、Issue 与 PR 模板
+├─ run_clips.cmd         常用启动入口
+├─ CONTRIBUTING.md       贡献和验证规范
+├─ CHANGELOG.md          版本变更记录
+└─ README.md
 ```
 
----
+根目录原来的 Python 入口和 `requirements*.txt` 是兼容转发，不再放业务实现。旧配置名称也会映射到新的 `config/local/`；迁移表见 [目录规范](docs/architecture/project-structure.md)。
 
-## 🚀 使用指南 (Workflow)
+本机已有的 `ouput/`、`workspace/`、`models/`、`third_party/` 和虚拟环境保持原位置，均不提交。不会因目录整理重新下载模型或搬动已有切片。
 
-### 第一步：素材准备
+## 开发与发布
 
-运行工具前，请确保以下文件已就位：
-1.  **录播视频文件**（完整视频）
-2.  **字幕文件**（`.srt` 或 `.txt`）
-3.  **元数据文件**（`Data_source.txt`）
-
-#### 1. 视频下载
-推荐使用以下工具获取 Bilibili 录播视频：
-- [SnapAny](https://snapany.com/zh/bilibili) / [效率坊](https://www.xiaolvfang.com/) / [ShowBL](https://www.showbl.com/lab/bilibili/) / [kedou](https://www.kedou.life/extract/bilibili)
-- 或者使用 [B站录播姬](https://github.com/Bililive/BililiveRecorder) 自行录制。
-
-#### 2. 字幕下载与处理
-推荐使用 **vCaptions** 插件下载字幕：
-- [Edge 插件下载](https://microsoftedge.microsoft.com/addons/detail/vcaptions-%E7%BB%99%E4%BB%BB%E6%84%8F%E7%BD%91%E7%AB%99%E8%A7%86%E9%A2%91%E6%B7%BB%E5%8A%A0%E5%AD%97%E5%B9%95%E5%88%97%E8%A1%A8/lignnlhlpiefmcjkdkmfjdckhlaiajan?hl=zh-CN)
-- [Chrome 插件下载](https://chromewebstore.google.com/detail/vcaptions-%E7%BB%99%E4%BB%BB%E6%84%8F%E7%BD%91%E7%AB%99%E8%A7%86%E9%A2%91%E6%B7%BB%E5%8A%A0%E5%AD%97%E5%B9%95%E5%88%97%E8%A1%A8/bciglihaegkdhoogebcdblfhppoilclp?hl=zh-CN&utm_source=ext_sidebar)
-
-或者使用在线提取：[飞鱼多字幕工具](https://www.feiyudo.com/caption/subtitle/bilibili)
-
-> **⚠️ 注意**：获取字幕后，请务必运行 `utils/ASRCorrector.py` 对字幕进行自动纠错，以提高识别准确率。
-
----
-
-### 第二步：生成高光片段元数据 (核心)
-
-你需要将高光时刻的元数据填入 `Data_source.txt`。本仓库提供两种自动化生成方法：
-
-#### 📊 方法对比
-
-| 特性 | 方法一：LLM 提示词法 | 方法二：弹幕热度法 |
-| :--- | :--- | :--- |
-| **原理** | 依靠直播字幕 + 大模型语义理解 | 依靠弹幕密度波峰 + 字幕辅助 |
-| **优点** | **无需接口**，可利用 Gemini/GPT 高级推理能力；<br>适用范围广（任意视频）。 | **客观真实**，反映观众实时反应；<br>全自动化，无需手动提问。 |
-| **缺点** | 依赖字幕质量；无法识别纯画面/动作梗。 | 必须有大量弹幕（仅限官方录播）；<br>需要调用 LLM API (消耗 Token)。 |
-| **适用场景**| 字幕清晰、对话为主的直播 | 官方大型直播、弹幕互动多的场次 |
-
-#### 📥 `Data_source.txt` 数据格式示例
-无论使用哪种方法，最终填入的数据格式必须如下：
-
-```json
-[
-  {
-    "timestamp": "00:49:52-00:50:16",
-    "title": "破防了！嘉然自曝演唱会蹦迪因身高太矮被淹没",
-    "summary": "嘉然分享独自看演唱会的尴尬经历...",
-    "cover_text_1": "站起也被淹没",
-    "cover_text_2": "警告一次",
-    "highlight_reason": "嘉然自嘲身高梗，节目效果强烈。"
-  }
-]
+```bat
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements\asr.txt
+.\.venv\Scripts\python.exe -X utf8 -m unittest discover -s tests -q
+.\.venv\Scripts\python.exe -X utf8 -m scripts.check_repository
 ```
 
-#### 👉 操作流程
+测试使用模拟模型、临时素材和本机 FFmpeg，不调用付费 API，也不下载 ASR 权重。GitHub Actions 会在 Windows / Python 3.12 环境执行同一套检查；远端执行结果以仓库 Actions 页面为准。
 
-**方法一：LLM 提示词法 (prompt_method)**
-1.  找到 `prompt_method` 文件夹。
-2.  将**纠错后的字幕文件**作为附件，配合对应的 Prompt 发送给高级大模型（推荐 GPT-5, Claude 4.5, Gemini 3.0 Pro, 豆包等）。
-3.  将模型生成的 JSON 数据复制到 `Data_source.txt`。
+提交前检查会核对本机文件是否混入、疑似密钥、公开配置模板、大文件和文档链接。它检查当前文件集合，不代替 Git 历史审计或人工检查。
 
-**方法二：弹幕热度法 (danmu_method)**
-1.  获取直播弹幕：
-    *   运行 `utils/get_danmu.py` 下载。
-    *   或者使用其他方法，用第三方工具转换弹幕格式（如 XML 格式需转换为 ASS 格式，[转换工具](https://tiansh.github.io/us-danmaku/bilibili/)）。
-2.  将 `直播弹幕.ass` 和 `字幕.srt` 放入视频同级目录。
-3.  配置并运行 `danmu_method/get_data_by_danmu.py`，程序将自动填充 `Data_source.txt`。
+需要纯源码包时：
 
- 
-> **💡 进阶技巧：官方弹幕 + 非官方视频**
-> 如果你想利用官方录播的弹幕热度数据，来剪辑非官方录播的视频（通常存在时间偏差），请在生成数据后额外执行一步：
->
-> 运行脚本：`utils/edit_data_source_timestep.py`
->
-> **作用**：该脚本会自动修正 `Data_source.txt` 中的时间戳，将其从官方录播时间对齐到你下载的非官方视频时间轴。
+```bat
+.\.venv\Scripts\python.exe -X utf8 -m scripts.export_source
+```
 
----
+源码包写入 `workspace/releases/ASoulAutoClip-source.zip`，不会包含 `.env`、本机配置、模型、录播或成片。
 
-### 第三步：运行主程序
+准备上传 GitHub 时，按 [发布指南](docs/guides/github-publish.md) 核对文件、提交范围和远端地址。公开仓库只包含源码、空白配置模板、文档和离线测试；`.gitignore` 不会自动清除已经进入历史的文件，当前检查也不是全历史凭据扫描。
 
-1.  打开 `Auto_clip.py`，根据注释填写相关文件路径配置。
-2.  运行程序。
-3.  等待输出文件夹中生成切片视频、切片封面 (10个切片大约耗时2分钟)。
+## 常见问题
 
-> **提示**：如果对结果不满意，可手动微调 `Data_source.txt` 中的标题或封面内容，再次运行脚本即可。
-另外，如果视频中有字幕错误，可以手动在输出文件夹中的 `[相应切片标题].ass` 文件中修改字幕，再次运行脚本即可。
+| 现象 | 查看什么 |
+| --- | --- |
+| 运行完成但零切片 | `analysis.json` 的 `clips`、`rejected`、`failures`；初选为空与分数被过滤不同，见 [看点门槛](docs/guides/quality-gate.md) |
+| API Key 配好了仍报错 | `llm.api_key_env` 填环境变量名称，实际密钥放 `.env`；查看 HTTP 状态和余额/权限提示 |
+| 首次转写长时间无进度 | 模型下载、网络和 ASR 子进程日志，见 [运行指南](docs/guides/quickstart.md) |
+| 字幕名字识别错误 | 修改 [纠错词典](resources/dictionaries/asr_dict.txt)，保留原始识别与修改记录 |
+| 报告视频停在0:00 | 用 `open_preview.cmd` 或 [本机预览命令](docs/guides/report-preview.md) |
+| 录播姬任务一直等待 | 用 `python -m scripts.recorder_service --status` 查看事件、文件和弹幕等待原因 |
 
----
+问题反馈请给出复现命令、Python/FFmpeg 版本、ASR/模型名称和脱敏日志。不要在 Issue 上传密钥、Cookie、个人配置、整场录播或含隐私的完整字幕。
 
-## 🔗 传送门 (Resources)
+开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md)，功能原理见 [流程架构](docs/architecture/pipeline.md)，全部文档见 [文档索引](docs/README.md)。
 
-为了方便获取素材，这里整理了常用链接：
+## 项目来源与授权说明
 
-### 官方录播源
-*   [嘉然 (Diana)](https://space.bilibili.com/672328094/lists/222940?type=series)
-*   [贝拉 (Bella)](https://space.bilibili.com/672353429/lists/222938?type=series)
-*   [乃琳 (Eileen)](https://space.bilibili.com/672342685/lists/222754?type=series)
-*   [心宜 (fiona)](https://space.bilibili.com/3537115310721181/lists/3698069?type=series)
-*   [思诺 (gladys)](https://space.bilibili.com/3537115310721781/lists/3692011?type=series)
+项目沿用了原 ASoulAutoClip 的代码和工具，保留原作者“救一人为侠”及 [原项目链接](https://github.com/dayanggo/ASoulAutoClip)。原版说明已归档在 [历史 README](docs/history/readme-before-organization.md)。
 
-### 非官方录播
-*   [A-SOUL二创计画](https://space.bilibili.com/547510303/upload/video)
-*   [奶淇琳周报](https://space.bilibili.com/1729236416/upload/video) | [贝极星周报](https://space.bilibili.com/2114847153/upload/video) | [嘉心糖周报](https://space.bilibili.com/247210788/upload/video)
-*   [地海菠萝](https://space.bilibili.com/165364/upload/video) | [天神白娅](https://space.bilibili.com/12416994/upload/video)
-
----
-
-
-## ⚠️ 免责声明 (Disclaimer)
-
-1.  本项目为粉丝自制开源工具，**非 A-SOUL 官方项目**。
-2.  生成的视频素材版权归 **A-SOUL** 所有。
-3.  请在使用本工具进行二创投稿时，遵守 Bilibili 社区规范及 A-SOUL 二创公约。
-4.  本项目禁止用于任何商业盈利目的。
-
----
-
-## 🤝 贡献与支持
-
-欢迎提交 Issue 或 Pull Request！
-如果这个项目帮到了你，请给一个 Star ⭐️ 鼓励一下！
-
----
-## 👤 作者
-**救一人为侠**  
-Bilibili: [点击主页](https://space.bilibili.com/667041249)
+仓库当前未提供独立的 `LICENSE`；历史 README 同时出现 MIT 标识和禁止商业用途的表述。本次整理未重新授权，维护者需要明确一致的许可后再声明具体开源许可证。模型、字体与录播素材按各自授权使用，不随源码包分发。

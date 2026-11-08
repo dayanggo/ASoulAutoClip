@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/*.txt
+      - name: Install FFmpeg
+        run: choco install ffmpeg --yes --no-progress
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements/asr.txt
+      - name: Run offline tests
+        run: python -X utf8 -m unittest discover -s tests -q
+      - name: Check source tree
+        run: python -X utf8 -m scripts.check_repository

@@ -1,0 +1,91 @@
+{
+  "input": {
+    "video": "",
+    "srt": "",
+    "output_dir": ""
+  },
+  "llm": {
+    "base_url": "https://api.siliconflow.cn/v1",
+    "model": "",
+    "api_key_env": "SILICONFLOW_API_KEY",
+    "json_mode": true,
+    "enable_thinking": null,
+    "max_tokens": 4096,
+    "timeout_seconds": 180,
+    "attempts": 2
+  },
+  "asr": {
+    "backend": "faster_whisper",
+    "model": "turbo",
+    "device": "auto",
+    "compute_type": "auto",
+    "language": "zh",
+    "chunk_seconds": 25,
+    "beam_size": 3,
+    "initial_prompt": "A-SOUL，嘉然，贝拉，乃琳，心宜，思诺。"
+  },
+  "correction": {
+    "enabled": true,
+    "dictionary_path": "resources/dictionaries/asr_dict.txt",
+    "ignore_sources": []
+  },
+  "danmaku": {
+    "path": "",
+    "offset_seconds": 0,
+    "lookback_seconds": 8,
+    "tail_seconds": 2,
+    "max_priority_bonus": 5
+  },
+  "selection": {
+    "window_seconds": 600,
+    "overlap_seconds": 180,
+    "max_window_chars": 18000,
+    "min_clip_seconds": 15,
+    "max_clip_seconds": 180,
+    "candidates_per_window": 4,
+    "max_clips": 8,
+    "min_score": 85,
+    "boundary_context_seconds": 30,
+    "lead_ms": 200,
+    "tail_ms": 500,
+    "validation_attempts": 2,
+    "exclude_ranges_ms": [],
+    "brief": "中文游戏直播。面向不了解主播的普通观众，优先片内能理解的竞争关系、承诺与结果反差、意外接话或完整故事。普通出牌、技能说明、等待和失败重试不自动视为高光；游戏预录语音不当作主播发言。仅凭字幕不能确认操作精彩程度或输赢，不推测说话人身份，不为凑片数选片。"
+  },
+  "publication": {
+    "enabled": true,
+    "editorial_enabled": true,
+    "copy_review_enabled": true,
+    "cover_style": "event_yellow",
+    "cover_count": 3,
+    "font_path": "",
+    "source_url": "",
+    "tags": [
+      "直播切片"
+    ]
+  },
+  "render": {
+    "encoder": "libx264",
+    "subtitle_style": {
+      "font_family": "文悦新青年体 (须授权) W8-J",
+      "font_size": 84,
+      "caption_mode": "phrases",
+      "max_phrase_chars": 14,
+      "phrase_pause_ms": 180,
+      "caption_hold_ms": 100,
+      "bold": true,
+      "outline_width": 4,
+      "shadow_depth": 1,
+      "spacing": 0,
+      "margin_h": 10,
+      "margin_v": 50,
+      "primary_color": "&H0000E1FF",
+      "emphasis_mode": "none",
+      "balanced_lines": true,
+      "text_replacements": {
+        "冉总": "然总"
+      },
+      "orientation": "auto"
+    }
+  }
+}

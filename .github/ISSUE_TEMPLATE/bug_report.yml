@@ -1,0 +1,47 @@
+name: 问题反馈
+description: 安装、转写、选片、编码或报告出现异常
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: 请提供可复现的信息。日志请先脱敏，不要上传 API Key、Cookie、个人完整配置或整场录播。
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 出现问题的阶段
+      options:
+        - 安装或配置检查
+        - 本地转写
+        - 选片或边界复核
+        - 字幕或视频编码
+        - 标题或封面
+        - 报告预览
+        - 录播姬接入
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 系统、Python/FFmpeg版本、显卡、ASR后端、API服务与模型名。无需提供密钥。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤与启动命令
+      description: 隐去本机私人路径，说明输入是只有视频还是另有XML/ASS。
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期与实际结果
+      description: 零切片时请区分初选为空、被门槛过滤、API失败或编码失败。
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 脱敏后的错误日志
+      render: text
